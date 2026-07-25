@@ -4,6 +4,8 @@ import yfinance as yf
 import pandas as pd
 from google import genai
 import feedparser
+import http.server
+import socketserver
 
 # 自定義計算 EMA (不依賴 pandas_ta)
 def calculate_ema(series, period):
@@ -110,7 +112,7 @@ EMA 50 [當下]: {latest['EMA_50']:.2f}
     macro_data = get_macro_and_stock_data()
     news_data = get_targeted_news()
 
-    print("[4/4] 數據準備完畢，正在交由 Gemini 進行全方位宏觀與技術面深度沙盤推演...\n")
+    print("[4/4] 數據準備完畢，正在交由 Gemini 3.6 Flash 進行全方位宏觀與技術面深度沙盤推演...\n")
 
     prompt = f"""
 你是一個頂尖的華爾街宏觀經濟學家、地緣政治分析師兼加密貨幣量化操盤手。請結合以下四大維度進行深度沙盤推演與驗證。
@@ -141,19 +143,32 @@ EMA 50 [當下]: {latest['EMA_50']:.2f}
     )
     
     print("=" * 60)
-    print("🤖 【Gemini 宏觀暨地緣政治智能操盤驗證報告】")
+    print("🤖 【Gemini 3.6 Flash 宏觀暨地緣政治智能操盤驗證報告】")
     print("=" * 60)
     print(response.text)
     print("=" * 60)
 
+# 為了配合 Render Web Service 的要求，建立一個極簡伺服器讓它保持在線
+def run_web_server():
+    PORT = int(os.environ.get("PORT", 10000))
+    Handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        print(f"Web server is running on port {PORT}")
+        httpd.serve_forever()
+
 if __name__ == "__main__":
-    print("================ 🤖 旗艦級總經與技術策略驗證機器人 (Render 自動執行版) ================")
+    print("================ 🤖 旗艦級總經與技術策略驗證機器人 (Web Service 運行版) ================")
     
-    # 採用預設參數，不使用 input()，確保在 Render 背景中不會因為等待輸入而卡住
     product = "ETH"
     direction = "LONG"
     target_price = 3200.0
     stop_loss = 3100.0
     take_profit = 3500.0
 
-    analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
+    try:
+        analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
+    except Exception as e:
+        print(f"執行分析時發生錯誤: {e}")
+
+    # 執行完分析後，啟動網頁伺服器讓 Web Service 保持綠燈
+    run_web_server()
