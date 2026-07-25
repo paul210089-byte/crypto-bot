@@ -2,7 +2,6 @@ import os
 import ccxt
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 from google import genai
 import feedparser
 
