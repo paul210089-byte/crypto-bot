@@ -20,13 +20,19 @@ logger = logging.getLogger(__name__)
 def calculate_ema(series, period):
     return series.ewm(span=period, adjust=False).mean()
 
-# 自定義計算 RSI
+# 使用標準 Wilder 平滑法計算 RSI (與 TradingView / OKX 完全同步)
 def calculate_rsi(series, period=14):
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    
+    # 採用 Wilder's Smoothing (RMA)
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
 def get_macro_and_stock_data():
     tickers = {
@@ -160,7 +166,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 執行 AI 分析
     report = analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
 
-    # 如果報告太長，Telegram 會限制 4000 字，分段發送或直接發送
+    # 如果報告太長，Telegram 會限制 4000 字，分段發送
     if len(report) > 4000:
         for i in range(0, len(report), 4000):
             await update.message.reply_text(report[i:i+4000])
