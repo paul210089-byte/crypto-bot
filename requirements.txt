@@ -3,3 +3,4 @@ yfinance
 pandas
 google-genai
 feedparser
+python-telegram-bot
