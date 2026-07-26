@@ -4,6 +4,7 @@ import http.server
 import socketserver
 import threading
 import re
+import time
 import ccxt
 import yfinance as yf
 import pandas as pd
@@ -128,10 +129,22 @@ EMA20: {latest['EMA_20']:.2f} | EMA50: {latest['EMA_50']:.2f}
 請給出：1.技術總結 2.總經與FED連動 3.地緣政治風險 4.點位與風報比檢視 5.最終操盤結論。繁體中文回覆。
 """
         client = genai.Client()
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
+        
+        # 使用 gemini-3.6-flash 模型，並加入簡易重試機制
+        response = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model='gemini-3.6-flash',
+                    contents=prompt,
+                )
+                break
+            except Exception as api_err:
+                if ("429" in str(api_err) or "503" in str(api_err)) and attempt < 2:
+                    time.sleep(3)
+                    continue
+                raise api_err
+
         return response.text
     except Exception as e:
         return f"分析過程發生錯誤: {e}"
@@ -234,7 +247,6 @@ if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("check", check_command))
-    # 關鍵修正：加上這行才能接收並處理轉發的文字訊息！
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
     print("🤖 機器人已成功啟動並監聽中...")
