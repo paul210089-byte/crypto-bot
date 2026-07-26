@@ -109,10 +109,11 @@ EMA20: {latest['EMA_20']:.2f} | EMA50: {latest['EMA_50']:.2f}
         macro_data = get_macro_and_stock_data()
         news_data = get_targeted_news()
 
+        # 升級為「客觀多空預測與沙盤推演」的提示詞
         prompt = f"""
-你是一個頂尖的華爾街宏觀經濟學家、地緣政治分析師兼加密貨幣量化操盤手。請為以下自動解析的喊單策略進行深度沙盤推演：
+你是一個頂尖的加密貨幣量化預測專家與多空市場分析師。請針對以下策略及當前市場結構進行【客觀的多空趨勢預測與沙盤推演】：
 - 產品：{product}
-- 方向：{direction}
+- 原始設定方向：{direction}
 - 進場點位：{target_price}
 - 止損點位：{stop_loss}
 - 止盈點位：{take_profit}
@@ -126,11 +127,16 @@ EMA20: {latest['EMA_20']:.2f} | EMA50: {latest['EMA_50']:.2f}
 【即時焦點新聞】
 {news_data}
 
-請給出：1.技術總結 2.總經與FED連動 3.地緣政治風險 4.點位與風報比檢視 5.最終操盤結論。繁體中文回覆。
+請依據盤面結構獨立判斷多空，並給出：
+1. **多空結構與動能預測**（當前技術指標、均線排列與量能偏向多方還是空方）
+2. **多方情境沙盤**（若延續漲勢，支撐、壓力與目標價位為何）
+3. **空方情境沙盤**（若出現反轉、假突破或疲態，回測與下跌防守點位為何）
+4. **風控檢視與點位評估**（檢視原始點位的風險報酬比是否合理）
+5. **最終操盤結論**（明確給出多空偏向與操作建議）。
+繁體中文回覆。
 """
         client = genai.Client()
         
-        # 使用 gemini-3.6-flash 模型，並加入簡易重試機制
         response = None
         for attempt in range(3):
             try:
@@ -194,7 +200,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
-    await update.message.reply_text("🤖 偵測到群組喊單！正在自動解析並調用數據進行 Gemini 深度沙盤推演...")
+    await update.message.reply_text("🤖 偵測到喊單！正在進行多空獨立預測與沙盤推演...")
     product, direction, target_price, stop_loss, take_profit = parse_signal_text(text)
 
     if not all([product, direction, target_price, stop_loss, take_profit]):
@@ -212,19 +218,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 5:
-        await update.message.reply_text("⚠️ 格式錯誤！請輸入 `/check ETH LONG 1887 1855 1920`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ 格式錯誤！請輸入 `/check ETH LONG 1857 1845 1900`", parse_mode="Markdown")
         return
     
     product, direction, target_price, stop_loss, take_profit = args[0].upper(), args[1].upper(), float(args[2]), float(args[3]), float(args[4])
-    await update.message.reply_text(f"🔍 收到指令！正在分析 {product}...")
+    await update.message.reply_text(f"🔍 收到指令！正在獨立預測 {product} 的多空結構...")
     
     report = analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
     await update.message.reply_text(report)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 智能帶單驗證機器人已就緒！\n\n"
-        "✨ 直接將群組喊單訊息**「轉發 (Forward)」**給本機器人，即可自動產出 AI 驗證報告！",
+        "🤖 智能多空預測機器人已就緒！\n\n"
+        "✨ 直接將群組喊單訊息**「轉發 (Forward)」**給本機器人，即可自動產出多空雙向預測報告！",
         parse_mode="Markdown"
     )
 
