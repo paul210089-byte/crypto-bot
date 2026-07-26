@@ -129,18 +129,16 @@ EMA20: {latest['EMA_20']:.2f} | EMA50: {latest['EMA_50']:.2f}
 """
         client = genai.Client()
         response = client.models.generate_content(
-            model='gemini-3.6-flash',
+            model='gemini-2.5-flash',
             contents=prompt,
         )
         return response.text
     except Exception as e:
         return f"分析過程發生錯誤: {e}"
 
-# 自動解析喊單文字的函數
 def parse_signal_text(text):
     product, direction, target_price, stop_loss, take_profit = None, None, None, None, None
     
-    # 抓取產品 (例如 ETH, BTC)
     prod_match = re.search(r'(?:产品|幣種|币种|标的)[:：]?\s*([A-Za-z]+)', text)
     if prod_match:
         product = prod_match.group(1).upper()
@@ -150,17 +148,14 @@ def parse_signal_text(text):
                 product = coin
                 break
 
-    # 抓取方向 (做多/做空/LONG/SHORT)
     if '做多' in text or 'LONG' in text.upper():
         direction = 'LONG'
     elif '做空' in text or 'SHORT' in text.upper():
         direction = 'SHORT'
 
-    # 抓取數字 (進場、止損、止盈)
     numbers = re.findall(r'\d+(?:\.\d+)?', text)
     nums = [float(n) for n in numbers]
 
-    # 透過關鍵字或數字順序對應
     match_tp = re.search(r'(?:进场点位|進場點位|进场|進場)[:：]?\s*([^\n]+)', text)
     match_sl = re.search(r'(?:止損點位|止损点位|止损|止損)[:：]?\s*([^\n]+)', text)
     match_profit = re.search(r'(?:止盈點位|止盈点位|止盈)[:：]?\s*([^\n]+)', text)
@@ -175,50 +170,48 @@ def parse_signal_text(text):
     except:
         pass
 
-    # 如果沒抓到精準欄位，嘗試用預設邏輯補足
     if not target_price and len(nums) >= 1: target_price = nums[0]
     if not stop_loss and len(nums) >= 2: stop_loss = nums[1]
     if not take_profit and len(nums) >= 3: take_profit = nums[2]
 
     return product, direction, target_price, stop_loss, take_profit
 
-# 接收訊息與轉發訊息的處理器
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or update.message.caption
     if not text:
         return
 
-    # 檢查是否包含喊單特徵
-    if "产品" in text or "方向" in text or "进场" in text or "進場" in text or "/check" in text:
-        if text.startswith("/check"):
-            # 支援原本的 /check 指令
-            args = context.args
-            if len(args) < 5:
-                await update.message.reply_text("⚠️ 格式錯誤！請輸入 `/check ETH LONG 1887 1855 1920`", parse_mode="Markdown")
-                return
-            product, direction, target_price, stop_loss, take_profit = args[0].upper(), args[1].upper(), float(args[2]), float(args[3]), float(args[4])
-        else:
-            # 自動解析群組轉發過來的喊單文字
-            await update.message.reply_text("🤖 偵測到群組喊單！正在自動解析並調用數據進行 Gemini 深度沙盤推演...")
-            product, direction, target_price, stop_loss, take_profit = parse_signal_text(text)
+    await update.message.reply_text("🤖 偵測到群組喊單！正在自動解析並調用數據進行 Gemini 深度沙盤推演...")
+    product, direction, target_price, stop_loss, take_profit = parse_signal_text(text)
 
-        if not all([product, direction, target_price, stop_loss, take_profit]):
-            await update.message.reply_text("❌ 無法完整解析此則喊單的點位，請手動使用 `/check` 指令輸入！", parse_mode="Markdown")
-            return
+    if not all([product, direction, target_price, stop_loss, take_profit]):
+        await update.message.reply_text("❌ 無法完整解析此則喊單的點位，請手動使用 `/check` 指令輸入！", parse_mode="Markdown")
+        return
 
-        report = analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
-        
-        if len(report) > 4000:
-            for i in range(0, len(report), 4000):
-                await update.message.reply_text(report[i:i+4000])
-        else:
-            await update.message.reply_text(report)
+    report = analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
+    
+    if len(report) > 4000:
+        for i in range(0, len(report), 4000):
+            await update.message.reply_text(report[i:i+4000])
+    else:
+        await update.message.reply_text(report)
+
+async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) < 5:
+        await update.message.reply_text("⚠️ 格式錯誤！請輸入 `/check ETH LONG 1887 1855 1920`", parse_mode="Markdown")
+        return
+    
+    product, direction, target_price, stop_loss, take_profit = args[0].upper(), args[1].upper(), float(args[2]), float(args[3]), float(args[4])
+    await update.message.reply_text(f"🔍 收到指令！正在分析 {product}...")
+    
+    report = analyze_strategy_with_gemini(product, direction, target_price, stop_loss, take_profit)
+    await update.message.reply_text(report)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 智能帶單驗證機器人已就緒！\n\n"
-        "✨ **新功能啟用**：\n"
-        "你只要把 VIP 群組裡的喊單訊息**「轉發 (Forward)」**給本機器人，它就會自動幫你萃取幣種、進場與止損止盈，並立刻回傳 AI 驗證報告！",
+        "✨ 直接將群組喊單訊息**「轉發 (Forward)」**給本機器人，即可自動產出 AI 驗證報告！",
         parse_mode="Markdown"
     )
 
@@ -240,8 +233,9 @@ if __name__ == "__main__":
 
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("check", check_command if 'check_command' in globals() else None)) # 保留相容
+    app.add_handler(CommandHandler("check", check_command))
+    # 關鍵修正：加上這行才能接收並處理轉發的文字訊息！
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    print("🤖 機器人已升級：支援轉發自動解析帶單！")
+    print("🤖 機器人已成功啟動並監聽中...")
     app.run_polling()
